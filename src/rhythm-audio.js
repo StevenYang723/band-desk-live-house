@@ -20,13 +20,20 @@ function compose(song){
 }
 class Audio{
  constructor(){this.context=null;this.buffers=new Map();this.source=null;this.offset=0;this.anchor=0;this.running=false;this.generation=0;}
- async prepare(song,volume){if(!this.context){const Type=window.AudioContext||window.webkitAudioContext;if(!Type)throw Error('此浏览器不支持伴奏播放，请使用桌面版或较新的浏览器。');this.context=new Type();this.gain=this.context.createGain();this.gain.connect(this.context.destination);}await this.context.resume();this.gain.gain.value=volume;
+ async ready(context){if(context.state==='running')return;let timer;try{await Promise.race([context.resume(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('伴奏未能启动，请点击继续重试。')),2500);})]);}finally{clearTimeout(timer);}if(context.state!=='running')throw Error('伴奏未能启动，请点击继续重试。');}
+ async prepare(song,volume){
+  // A new track gets a fresh output clock. Keep decoded buffers, not an idle
+  // context whose output may have been suspended after the previous song.
+  this.stop();const previous=this.context;this.context=null;this.gain?.disconnect();if(previous&&previous.state!=='closed')previous.close().catch(()=>{});
+  const Type=window.AudioContext||window.webkitAudioContext;if(!Type)throw Error('此浏览器不支持伴奏播放，请使用桌面版或较新的浏览器。');const context=this.context=new Type(),ticket=this.generation;this.gain=context.createGain();this.gain.connect(context.destination);this.gain.gain.value=volume;
+  await this.ready(context);if(ticket!==this.generation||context!==this.context)return false;
   if(!this.buffers.has(song.id)){const samples=compose(song),buffer=this.context.createBuffer(1,samples.length,sampleRate);buffer.copyToChannel(samples,0);this.buffers.set(song.id,buffer);}this.buffer=this.buffers.get(song.id);this.offset=0;
+  return true;
  }
  audibleTime(){const c=this.context,stamp=c.getOutputTimestamp?.();if(stamp?.contextTime>0&&stamp.performanceTime>0)return Math.min(c.currentTime,stamp.contextTime+(performance.now()-stamp.performanceTime)/1000);return c.currentTime;}
  time(){return this.running?Math.max(0,this.audibleTime()-this.anchor):this.offset;}
- async play(){if(this.running)this.pause();const owner=++this.generation;await this.context.resume();if(owner!==this.generation)return;const when=this.context.currentTime+.12;this.anchor=when-this.offset;this.source=this.context.createBufferSource();this.source.buffer=this.buffer;this.source.connect(this.gain);this.source.start(when,Math.min(this.offset,this.buffer.duration-.01));this.running=true;}
- pause(){this.generation++;if(!this.running)return;this.offset=this.time();this.running=false;try{this.source.stop();}catch{}this.source=null;}
+ async play(){if(this.running)this.pause();const owner=++this.generation,context=this.context;await this.ready(context);if(owner!==this.generation||context!==this.context)return false;const when=context.currentTime+.12;this.anchor=when-this.offset;this.source=context.createBufferSource();this.source.buffer=this.buffer;this.source.connect(this.gain);this.source.start(when,Math.min(this.offset,this.buffer.duration-.01));this.running=true;return true;}
+ pause(){this.generation++;if(!this.running)return;this.offset=this.time();this.running=false;try{this.source.stop();this.source.disconnect();}catch{}this.source=null;}
  stop(){this.pause();this.offset=0;}
  volume(value){if(this.gain)this.gain.gain.setTargetAtTime(value,this.context.currentTime,.02);}
 }

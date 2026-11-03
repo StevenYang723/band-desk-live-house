@@ -36,6 +36,7 @@ node scripts/test-economy.cjs
 node scripts/test-rhythm.cjs
 node scripts/test-rhythm-audio.cjs
 node scripts/test-tour.cjs
+node scripts/test-tour-playback.cjs
 node scripts/serve.mjs
 ```
 

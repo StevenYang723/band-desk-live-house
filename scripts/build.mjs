@@ -11,7 +11,7 @@ change("$('minimize').onclick=()=>post('minimize');","$('minimize').hidden=true;
 change("$('exit').onclick=()=>{post('save');post('close');};","$('exit').onclick=()=>{if(window.TourGame?.active){notice('请先保存离开巡演，再打开存档管理');return;}post('close');};");
 change("<div class=\"sectionhead\"><h2>桌角事务所</h2><small>MANAGEMENT</small></div>","<div class=\"sectionhead\"><h2>桌角事务所</h2><small>MANAGEMENT</small></div><button class=\"btn ghost wide\" data-action=\"websave\">存档管理 · 导入 / 导出</button>");
 change("case'dismiss':close();return;","case'websave':open('websave');return;case'dismiss':close();return;");
-ui=ui.replaceAll('最小化窗口仍持续演出。','切到后台后，返回页面会按离线规则结算。').replaceAll('桌面版每 5 秒、重要操作后以及退出时保存，并保留上一份备份。窗口可拖动、调整大小、置顶。最小化继续演出；退出后按稳定通关记录结算离线收益。','网页版每 5 秒、重要操作后以及离开页面时保存，并保留上一份备份。进度保存在当前浏览器，可通过右上角存档按钮导出或导入。切到后台后，返回时按稳定演出记录结算离线收益。').replace('BAND DESK · v2.3','BAND DESK · WEB 2.7');
+ui=ui.replaceAll('最小化窗口仍持续演出。','切到后台后，返回页面会按离线规则结算。').replaceAll('桌面版每 5 秒、重要操作后以及退出时保存，并保留上一份备份。窗口可拖动、调整大小、置顶。最小化继续演出；退出后按稳定通关记录结算离线收益。','网页版每 5 秒、重要操作后以及离开页面时保存，并保留上一份备份。进度保存在当前浏览器，可通过右上角存档按钮导出或导入。切到后台后，返回时按稳定演出记录结算离线收益。').replace('BAND DESK · v2.3','BAND DESK · WEB 2.7.1');
 new Function(ui);fs.writeFileSync(path.join(dist,'ui.js'),ui);
 const art=read('art-pixel.js');new Function(art);fs.writeFileSync(path.join(dist,'art.js'),art);
 for(const f of ['data.js','rhythm-core.js','tour-rules.js','tour-engine.js','engine.js','web-platform.js','web-boot.js','recruit-animation.js','rhythm-audio.js','rhythm-game.js']){const code=read(f);new Function(code);fs.writeFileSync(path.join(dist,f),code);}
