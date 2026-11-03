@@ -68,5 +68,11 @@ function stage(canvas,engine,seconds,effects=[]){const g=canvas.getContext('2d')
  for(const e of effects){if(e.life<=0)continue;if(e.type==='skill'){const pos=positions[e.index];if(!pos)continue;g.textAlign='center';g.font='bold 8px Microsoft YaHei';g.fillStyle=e.crit?'#fff1b1':'#b6f0e8';g.fillText(e.crit?'PERFECT':'♪',pos[0]+32,Math.max(26,pos[1]-(e.index<3?32:19)-(1-e.life/2)*12));}if(e.type==='encore'){g.font='bold 25px Consolas';g.textAlign='center';g.fillStyle='#211d37';g.fillText('ENCORE!',182,124);g.fillStyle='#f9dc94';g.fillText('ENCORE!',180,122);for(let i=0;i<15;i++){r((i*37+t*18)%360,50+((i*27+t*23)%130),2,3,[accent,'#b2e6df','#f9dc94'][i%3]);}}}
  if(s.paused){g.fillStyle='#181b32aa';g.fillRect(0,0,w,h);g.textAlign='center';g.font='bold 16px Microsoft YaHei';g.fillStyle='#f7e2c6';g.fillText('演出暂停',180,127);}
 }
-root.PixelArt={ready,progress,retry,source:id=>images[id]?.src||assets.characters[id].body,isReady:()=>loaded,character,avatar,iconCanvas,stage,instrument,star};
+function rhythmStage(canvas,engine,t,effects=[]){
+ const g=canvas.getContext('2d'),s=engine.s,w=360,h=80,team=s.team,accent=D.byBand[D.byChar[team[0]]?.band]?.color||'#8bd2ce';g.setTransform(canvas.width/w,0,0,canvas.height/h,0,0);g.imageSmoothingEnabled=false;g.fillStyle='#192438';g.fillRect(0,0,w,h);
+ for(let x=0;x<w;x+=12){g.fillStyle=x%24?'#233147':'#28354c';g.fillRect(x,0,12,63);}g.fillStyle='#70596d';g.fillRect(0,65,w,13);g.fillStyle='#b39098';g.fillRect(0,65,w,2);
+ team.forEach((id,i)=>{const center=w*(i+.5)/team.length,active=effects.some(e=>e.type==='skill'&&e.index===i);g.fillStyle=accent+(active?'40':'15');g.beginPath();g.moveTo(center-5,0);g.lineTo(center-30,65);g.lineTo(center+30,65);g.lineTo(center+5,0);g.fill();character(g,id,center-32,-24,.65,t,true);g.fillStyle=active?'#fff0b9':accent;g.fillRect(center-13,74,26,2);});
+ if(effects.some(e=>e.type==='encore')){g.fillStyle='#ffe3ae';for(let i=0;i<18;i++)g.fillRect((i*43+t*40)%w,(i*23+t*30)%h,2,3);}
+}
+root.PixelArt={ready,progress,retry,source:id=>images[id]?.src||assets.characters[id].body,isReady:()=>loaded,character,avatar,iconCanvas,stage,rhythmStage,instrument,star};
 })(window);

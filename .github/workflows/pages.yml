@@ -29,6 +29,8 @@ jobs:
           node scripts/test-loading.cjs
           node scripts/test-recruit-animation.cjs
           node scripts/test-economy.cjs
+          node scripts/test-rhythm.cjs
+          node scripts/test-rhythm-audio.cjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

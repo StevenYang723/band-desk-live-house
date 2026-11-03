@@ -7,6 +7,9 @@
 - 69 位成员，金币随机招募，重复成员转为专属技能点。
 - 招募支持像素舞台开幕、单抽角色亮相与十连逐张翻牌，可跳过动画；结果在动画前保存。
 - 随机乐器、装备位强化、词条重铸和角色适配加成。
+- 四轨节奏演出：三首原创合成伴奏，普通 / 困难双谱面，D/F/J/K 或触屏操作，支持单点、长按和双押。
+- 准确率与手动安可提供最多 30% 金币、声望加成；保留自动挂机。打歌结算需手动继续，随后恢复原先的挂机状态。
+- 节奏演出支持音量、判定偏移和个人最佳纪录。切后台暂停音乐及谱面，中途退出不发放打歌奖励。
 - 每场展示金币、声望、零件和装备奖励；自动模式停留 3 秒继续，手动模式点击继续。
 - 同一舞台完成 3 场且最佳评价达到 A 后解锁离线收益。每天 6 小时，每次升级 +3 小时，最多每天 24 小时，北京时间零点刷新。
 - 支持手机、电脑浏览器和本地自动存档，可导入、导出 JSON。
@@ -27,6 +30,8 @@ node scripts/check.mjs
 node scripts/test-loading.cjs
 node scripts/test-recruit-animation.cjs
 node scripts/test-economy.cjs
+node scripts/test-rhythm.cjs
+node scripts/test-rhythm-audio.cjs
 node scripts/serve.mjs
 ```
 

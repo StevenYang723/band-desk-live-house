@@ -5,13 +5,14 @@ const copy=o=>JSON.parse(JSON.stringify(o));
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const integer=(x,a,b,def=a)=>Number.isFinite(x)?Math.floor(clamp(x,a,b)):def;
 const R=D.recruitment;
+const RH=typeof module!=='undefined'?require('./rhythm-core.js'):root.RhythmRules;
 const DAY=86400000,DAY_OFFSET=8*3600000;
 const dayKey=ms=>String(Math.floor((ms+DAY_OFFSET)/DAY));
 const ratingFor=ratio=>ratio>=1.8?'SS':ratio>=1.25?'S':ratio>=.90?'A':ratio>=.55?'B':'C';
 const rewardFactor={C:.65,B:1,A:1.35,S:1.8,SS:2.5};
 const qualityOdds={C:[.30,.65,.89,.985],B:[.24,.59,.86,.98],A:[.15,.45,.78,.96],S:[.08,.30,.65,.92],SS:[.03,.15,.47,.86]};
 const newMember=()=>({bond:0,skill:1,skillPoints:0,gear:{},enhance:{main:0,acc1:0,acc2:0}});
-const defaults=()=>({schemaVersion:4,appId:'band-desk',savedAt:Date.now(),started:false,coins:300,fame:0,parts:0,skinTokens:0,recruitCount:0,recruitHistory:[],time:0,shows:0,venue:0,rank:0,train:1,facility:0,offlineLevel:0,offlineUsage:{},offlineClaimedAt:0,pendingResult:null,settlementRemaining:0,auto:true,paused:false,sound:false,team:[],owned:[],members:{},items:[],serial:0,progress:0,heat:0,cooldowns:[],skillCounts:{},encoreCD:0,encoreCount:0,focusType:'all',wish:'tomori',pity:0,preset:'steady',autoSalvage:true,autoPush:false,best:{},lastResults:[],totalCoins:0,tour:null,tourClears:0,collections:[],support:null,sideTeam:[],sideProgress:0,sideShows:0,slot:0,loadouts:{},reroll:null,events:[],rng:(Date.now()>>>0)||65719});
+const defaults=()=>({schemaVersion:4,appId:'band-desk',savedAt:Date.now(),started:false,coins:300,fame:0,parts:0,skinTokens:0,recruitCount:0,recruitHistory:[],time:0,shows:0,venue:0,rank:0,train:1,facility:0,offlineLevel:0,offlineUsage:{},offlineClaimedAt:0,pendingResult:null,settlementRemaining:0,auto:true,paused:false,sound:false,team:[],owned:[],members:{},items:[],serial:0,progress:0,heat:0,cooldowns:[],skillCounts:{},encoreCD:0,encoreCount:0,focusType:'all',wish:'tomori',pity:0,preset:'steady',autoSalvage:true,autoPush:false,best:{},lastResults:[],totalCoins:0,tour:null,tourClears:0,collections:[],support:null,sideTeam:[],sideProgress:0,sideShows:0,slot:0,loadouts:{},reroll:null,events:[],rhythmSettings:{song:'starlight',difficulty:'normal',offset:0,volume:.65},rhythmRecords:{},rhythmRun:null,rng:(Date.now()>>>0)||65719});
 class Engine{
  constructor(){this.s=defaults();this.fx=[];this.revision=0;this.offline=null;this.teamCache=null;}
  rand(){let x=this.s.rng|0;x^=x<<13;x^=x>>>17;x^=x<<5;this.s.rng=x>>>0;return this.s.rng/4294967296;}
@@ -58,8 +59,8 @@ class Engine{
   if(m.affinity&&this.s.skillCounts[id]%3===0){this.s.heat+=m.power*.55;this.fx.push({type:'skill',index,text:'适配合奏',crit:true});}else this.fx.push({type:'skill',index,text:(crit?'PERFECT · ':'')+c.skill,crit});return true;
  }
  encore(manual=false){if(!this.s.started||this.s.paused||this.s.pendingResult||this.s.encoreCD>0)return false;const st=this.stats();this.s.heat+=st.power*.32*(1+st.mods.encore)*(manual?1.12:1);this.s.encoreCD=20;this.s.encoreCount++;this.fx.push({type:'encore',text:'ENCORE!'});return true;}
- tick(dt){if(!this.s.started||this.s.paused)return;
-  if(this.s.pendingResult){if(this.s.auto){this.s.settlementRemaining=Math.max(0,this.s.settlementRemaining-dt);if(this.s.settlementRemaining<=0)this.continueShow();}return;}
+ tick(dt){if(!this.s.started||this.s.paused||this.s.rhythmRun)return;
+  if(this.s.pendingResult){if(this.s.auto&&!this.s.pendingResult.rhythm){this.s.settlementRemaining=Math.max(0,this.s.settlementRemaining-dt);if(this.s.settlementRemaining<=0)this.continueShow();}return;}
   this.s.time+=dt;const st=this.stats(),v=D.venues[this.s.venue];this.s.progress+=dt;
   let late=(st.mods.finale&&this.s.progress>v.duration*.7)?st.mods.finale:0;
   const steady=st.mods.steady*(this.s.progress/v.duration);this.s.heat+=dt*st.power*.020*(1+st.mods.heat+late+steady);
@@ -94,6 +95,20 @@ class Engine{
   this.resetShow();s.pendingResult=result;s.settlementRemaining=3;this.fx.push({type:'result',...result});this.touch();
  }
 
+ beginRhythm(song,difficulty){
+  const s=this.s;if(!s.started||s.pendingResult||s.rhythmRun||!RH.getSong(song)||!['normal','hard'].includes(difficulty)||s.tour?.choices||s.tour?.routeChoices)return false;
+  const token=String(Date.now())+'-'+this.rand().toString(36).slice(2);s.rhythmRun={token,song,difficulty};this.touch();return token;
+ }
+ cancelRhythm(token){if(!this.s.rhythmRun||this.s.rhythmRun.token!==token)return false;this.s.rhythmRun=null;this.touch();return true;}
+ finishRhythm(token,raw){
+  const s=this.s,run=s.rhythmRun;if(!run||run.token!==token)return false;const result=RH.validate(raw,run.song,run.difficulty);if(!result)return false;
+  s.rhythmRun=null;const auto=s.auto,paused=s.paused;s.auto=true;s.paused=false;this.resetShow();this.advance(this.duration());s.auto=auto;s.paused=paused;
+  const reward=s.pendingResult;if(!reward)return false;
+  // Keep offline records on the ordinary performance reward, before the manual bonus.
+  const bonusCoins=Math.round(reward.coins*result.bonusRate),bonusFame=Math.round(reward.fame*result.bonusRate);s.coins=Math.min(9e12,s.coins+bonusCoins);s.totalCoins+=bonusCoins;s.fame+=bonusFame;reward.coins+=bonusCoins;reward.fame+=bonusFame;
+  const key=run.song+':'+run.difficulty,old=s.rhythmRecords[key],record={score:Math.max(old?.score||0,result.score),maxCombo:Math.max(old?.maxCombo||0,result.maxCombo),fullCombo:!!old?.fullCombo||result.fullCombo,allPerfect:!!old?.allPerfect||result.allPerfect,plays:(old?.plays||0)+1};s.rhythmRecords[key]=record;
+  reward.rhythm={...result,bonusCoins,bonusFame,newRecord:!old||result.score>old.score};this.touch();return reward;
+ }
  selectVenue(i){if(!Number.isInteger(i)||!D.venues[i]||this.s.fame<D.venues[i].fame||this.s.tour)return false;this.s.venue=i;this.resetShow();return true;}
  setRank(n){if(this.s.fame<10500)return false;this.s.rank=integer(n,0,50);this.resetShow();return true;}
  recruitCost(count=1){return [1,10].includes(count)?R.coinCost*count:null;}
@@ -136,14 +151,18 @@ class Engine{
   if(s.tour){const t=s.tour;s.tour={node:integer(t.node,0,11),buffs:(t.buffs||[]).filter(id=>D.inspirations.some(i=>i.id===id)).slice(0,12),choices:Array.isArray(t.choices)?t.choices.filter(id=>D.inspirations.some(i=>i.id===id)).slice(0,3):null,choiceTime:0,routeChoices:!!t.routeChoices,routeTime:0,route:['stage','market','workshop'].includes(t.route)?t.route:'stage',coins:integer(t.coins,0,9e12)};}
   if(s.reroll&&(!s.items.some(i=>i.id===s.reroll.item)||!Array.isArray(s.reroll.aff)))s.reroll=null;
   const today=Number(dayKey(Date.now()));s.offlineUsage=Object.fromEntries(Object.entries(s.offlineUsage||{}).filter(([day])=>/^\d+$/.test(day)&&Number(day)>=today-1&&Number(day)<=today).map(([day,used])=>[day,clamp(Number(used)||0,0,86400)]));s.offlineClaimedAt=clamp(Number(s.offlineClaimedAt)||0,0,Date.now());
+  for(const result of s.lastResults){if(!result?.rhythm)continue;const r=result.rhythm,valid=RH.getSong(r.song)&&['normal','hard'].includes(r.difficulty)?RH.validate(r,r.song,r.difficulty):null;result.rhythm=valid?{...valid,bonusCoins:integer(r.bonusCoins,0,9e12),bonusFame:integer(r.bonusFame,0,9e12),newRecord:!!r.newRecord}:null;}
   s.pendingResult=s.pendingResult&&Number.isInteger(s.pendingResult.show)&&s.pendingResult.show===s.shows?s.lastResults.find(r=>r.show===s.shows)||null:null;s.settlementRemaining=s.pendingResult?clamp(Number(s.settlementRemaining)||0,0,3):0;
+  const interruptedRhythm=!!s.rhythmRun;s.rhythmRun=null;const settings=s.rhythmSettings||{};s.rhythmSettings={song:RH.getSong(settings.song)?settings.song:'starlight',difficulty:settings.difficulty==='hard'?'hard':'normal',offset:integer(settings.offset,-200,200,0),volume:clamp(Number.isFinite(settings.volume)?settings.volume:.65,0,1)};
+  const records={};for(const song of RH.songs)for(const level of ['normal','hard']){const key=song.id+':'+level,r=s.rhythmRecords?.[key];if(!r)continue;records[key]={score:integer(r.score,0,1000000),maxCombo:integer(r.maxCombo,0,RH.chart(song.id,level).units),fullCombo:!!r.fullCombo,allPerfect:!!r.allPerfect,plays:integer(r.plays,0,1e9)};}s.rhythmRecords=records;
+  if(interruptedRhythm){s.offlineClaimedAt=Date.now();applyOffline=false;}
   this.s=s;this.touch();this.fx=[];this.offline=null;if(migratedCoins)this.note('招募更新 · 旧邀请进度已折算为 '+migratedCoins+' 金币','rare');if(applyOffline)this.offlineCredit(Number(x.savedAt)||Date.now());return true;
  }catch{return false;}}
  offlineCandidates(){const record=this.s.offlineRecord;return [...Object.entries(this.s.best),...(record?[[record.venue,record]]:[])].filter(([i,b])=>D.venues[i]&&b&&b.count>=3&&['A','S','SS'].includes(b.rating)&&Number.isFinite(b.coins)&&Number.isFinite(b.fame)).sort((a,b)=>b[1].coins/(D.venues[b[0]].duration+3)-a[1].coins/(D.venues[a[0]].duration+3));}
  offlineUnlocked(){return this.offlineCandidates().length>0;}
  offlineHours(){return 6+this.s.offlineLevel*3;}
  offlineRemaining(now=Date.now()){return Math.max(0,this.offlineHours()*3600-(this.s.offlineUsage[dayKey(now)]||0));}
- offlineCredit(savedAt,now=Date.now()){const s=this.s;this.offline=null;if(!s.started||s.paused||!s.auto)return;
+ offlineCredit(savedAt,now=Date.now()){const s=this.s;this.offline=null;if(!s.started||s.paused||!s.auto||s.rhythmRun)return;
   const from=Math.max(Number(savedAt)||now,s.offlineClaimedAt||0,now-DAY),elapsed=Math.max(0,now-from)/1000;if(elapsed<60)return;
   const candidates=this.offlineCandidates();if(!candidates.length){s.offlineClaimedAt=now;return;}
   const [vi,b]=candidates[0],v=D.venues[vi],cycle=v.duration+3,cap=this.offlineHours()*3600;let cursor=from,count=0,seconds=0;

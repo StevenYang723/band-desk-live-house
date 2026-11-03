@@ -1,0 +1,22 @@
+const assert=require('node:assert/strict'),R=require('../src/rhythm-core.js'),Engine=require('../src/engine.js');
+const checks=[],charts=[];
+function perfect(id='starlight',difficulty='normal'){
+ const session=new R.Session(id,difficulty),events=session.notes.flatMap(n=>[{at:n.time,lane:n.lane,down:true},...(n.length?[{at:n.end,lane:n.lane,down:false}]:[])]).sort((a,b)=>a.at-b.at||Number(b.down)-Number(a.down));
+ for(const event of events){if(event.down)session.press(event.lane,event.at);else session.release(event.lane,event.at);if(session.energy>=100)session.encore();}session.update(session.duration+1);return session;
+}
+for(const song of R.songs)for(const difficulty of ['normal','hard']){
+ const c=R.chart(song.id,difficulty);assert(c.duration>=40&&c.duration<=60);assert(c.notes.some(n=>n.length));assert(c.notes.some((n,i)=>c.notes.some((p,j)=>i!==j&&p.time===n.time)));assert.equal(JSON.stringify(c),JSON.stringify(R.chart(song.id,difficulty)));
+ for(let lane=0;lane<4;lane++){const notes=c.notes.filter(n=>n.lane===lane).sort((a,b)=>a.time-b.time);for(let i=1;i<notes.length;i++)assert(notes[i].time-notes[i-1].end>=.219);}
+ const s=perfect(song.id,difficulty),result=s.summary();assert.equal(result.accuracy,1);assert.equal(result.maxCombo,c.units);assert(result.allPerfect);assert(result.fullCombo);assert.equal(R.validate(result,song.id,difficulty).bonusRate,.3);assert(s.encores>=2);charts.push({song:song.name,difficulty,notes:c.notes.length,units:c.units,seconds:c.duration});
+ const idle=new R.Session(song.id,difficulty);idle.update(c.duration+1);assert.equal(idle.counts.miss,c.units);assert.equal(idle.summary().score,0);assert(!idle.summary().fullCombo);
+}checks.push('Six deterministic 40–60s charts with taps, doubles, nonoverlapping holds; perfect and all-miss completion');
+assert.equal(R.grade(.044),'perfect');assert.equal(R.grade(-.089),'great');assert.equal(R.grade(.149),'good');assert.equal(R.grade(.151),'miss');
+const early=new R.Session('starlight');const hold=early.notes.find(n=>n.length);early.press(hold.lane,hold.time);early.release(hold.lane,hold.time+.1);assert.equal(hold.head,'perfect');assert.equal(hold.tail,'miss');const count=early.judged;early.release(hold.lane,hold.time+.1);assert.equal(early.judged,count);checks.push('Timing windows, early hold release and duplicate tail prevention');
+const e=new Engine();e.s.rng=1637;e.start('mygo');e.advance(3);const partial=e.snapshot(),token=e.beginRhythm('starlight','normal');assert(token);e.advance(300);assert.equal(e.s.progress,partial.progress);assert.equal(e.s.coins,partial.coins);assert.equal(e.beginRhythm('neon','hard'),false);
+const interrupted=new Engine();assert(interrupted.restore(e.snapshot(),true));assert.equal(interrupted.s.rhythmRun,null);assert.equal(interrupted.s.coins,partial.coins);assert.equal(interrupted.s.progress,partial.progress);assert(e.cancelRhythm(token));assert.equal(e.s.progress,partial.progress);checks.push('Idle/side progress held during rhythm; cancellation/reload cannot farm extra rewards');
+const id=e.beginRhythm('starlight','normal'),s=perfect();const invalid={...s.summary(),counts:{perfect:9999,great:0,good:0,miss:0}};assert.equal(e.finishRhythm(id,invalid),false);assert.equal(e.finishRhythm('wrong-token',s.summary()),false);
+const result=e.finishRhythm(id,s.summary());assert(result.rhythm);assert.equal(result.rhythm.bonusRate,.3);assert.equal(result.coins-result.rhythm.bonusCoins,e.s.best[0].coins);assert.equal(result.fame-result.rhythm.bonusFame,e.s.best[0].fame);assert.equal(e.s.rhythmRecords['starlight:normal'].plays,1);const wallet=e.s.coins;
+assert.equal(e.finishRhythm(id,s.summary()),false);assert.equal(e.s.coins,wallet);e.advance(100);assert(e.s.pendingResult);assert.equal(e.s.coins,wallet);checks.push('Single settlement, capped bonus, manual result hold and offline baseline excludes bonus');
+const restored=new Engine();assert(restored.restore(e.snapshot(),false));assert.equal(restored.s.pendingResult.rhythm.score,1000000);assert.equal(restored.s.rhythmRecords['starlight:normal'].plays,1);assert(restored.continueShow());restored.advance(1);assert(restored.s.progress>0);checks.push('Result and best score survive reload; original automatic mode resumes after Continue');
+const legacy=partial;delete legacy.rhythmSettings;delete legacy.rhythmRecords;assert(new Engine().restore(legacy,false));checks.push('Existing v4 saves migrate without resetting progress');
+console.log(JSON.stringify({passed:true,checks,charts},null,2));
