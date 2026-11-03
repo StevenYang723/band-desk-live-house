@@ -23,6 +23,7 @@
 ```sh
 node scripts/build.mjs
 node scripts/check.mjs
+node scripts/test-loading.cjs
 node scripts/test-economy.cjs
 node scripts/serve.mjs
 ```

@@ -1,4 +1,4 @@
-import fs from 'node:fs';import path from 'node:path';import {fileURLToPath} from 'node:url';
+import fs from 'node:fs';import path from 'node:path';import {fileURLToPath} from 'node:url';import {createHash} from 'node:crypto';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),src=path.join(root,'src'),dist=path.join(root,'dist');fs.mkdirSync(dist,{recursive:true});
 const read=n=>fs.readFileSync(path.join(src,n),'utf8');
 let ui=read('ui.js');const change=(a,b)=>{if(!ui.includes(a))throw Error('UI anchor missing: '+a.slice(0,90));ui=ui.replace(a,b)};
@@ -13,7 +13,7 @@ change("<div class=\"sectionhead\"><h2>桌角事务所</h2><small>MANAGEMENT</sm
 change("case'dismiss':close();return;","case'websave':open('websave');return;case'dismiss':close();return;");
 ui=ui.replaceAll('最小化窗口仍持续演出。','切到后台后，返回页面会按离线规则结算。').replaceAll('桌面版每 5 秒、重要操作后以及退出时保存，并保留上一份备份。窗口可拖动、调整大小、置顶。最小化继续演出；退出后按稳定通关记录结算离线收益。','网页版每 5 秒、重要操作后以及离开页面时保存，并保留上一份备份。进度保存在当前浏览器，可通过右上角存档按钮导出或导入。切到后台后，返回时按稳定演出记录结算离线收益。').replace('BAND DESK · v2.3','BAND DESK · WEB 2.4');
 new Function(ui);fs.writeFileSync(path.join(dist,'ui.js'),ui);
-let art=read('art-pixel.js');art=art.replace("const assets=root.ArtAssets,images={};let loaded=false;","const assets=root.ArtAssets,images={},progress={loaded:0,total:Object.keys(assets.characters).length,failed:[]};let loaded=false;");art=art.replace('images[id]=im;resolve();','images[id]=im;progress.loaded++;resolve();').replace('im.onerror=resolve;','im.onerror=()=>{progress.failed.push(id);resolve();};').replace('root.PixelArt={ready,','root.PixelArt={progress,ready,');fs.writeFileSync(path.join(dist,'art.js'),art);
+const art=read('art-pixel.js');new Function(art);fs.writeFileSync(path.join(dist,'art.js'),art);
 for(const f of ['data.js','engine.js','web-platform.js','web-boot.js']){const code=read(f);new Function(code);fs.writeFileSync(path.join(dist,f),code);}
 fs.writeFileSync(path.join(dist,'assets.js'),'window.ArtAssets='+fs.readFileSync(path.join(root,'assets/characters.json'),'utf8')+';');
 let css=read('style.css')+'\n'+read('style-pixel.css')+'\n'+read('web.css');css=css.replaceAll('data:font/woff2;base64,__PIXELFONT__','assets/fonts/pixel-12.woff2').replaceAll('data:font/woff2;base64,__FONT8__','assets/fonts/pixel-8.woff2').replaceAll('data:font/woff2;base64,__FONT10__','assets/fonts/pixel-10.woff2');fs.writeFileSync(path.join(dist,'style.css'),css);
@@ -22,5 +22,8 @@ html=html.replace("default-src 'none'; script-src 'unsafe-inline'; style-src 'un
 html=html.replace('<style>__STYLE__</style>','<link rel="stylesheet" href="style.css">').replace('<title>BanG Dream 桌角Live House</title>','<title>BanG Dream 桌角 Live House｜在线小游戏</title>');
 html=html.replace('<button id="pin" title="窗口置顶" aria-label="窗口置顶" aria-pressed="true">◆</button>','<button id="pin" title="全屏游玩" aria-label="全屏游玩">□</button>').replace('<button id="exit" title="保存并退出" aria-label="保存并退出">×</button>','<button id="exit" title="存档管理" aria-label="存档管理">▣</button>');
 html=html.replace(/<script>window.ArtAssets=__ASSETS__;[\s\S]*?<\/body>/,`<div id="web-loading" role="status"><div class="web-loading-box"><h1>BanG Dream!<br>桌角 Live House</h1><p id="web-load-status">正在准备角色与舞台…</p><progress id="web-load-progress" value="0" max="69"></progress><p>非官方同人小游戏 · 进度保存在本机</p><button id="web-retry" class="btn wide" data-web-action="reload" hidden>重新加载</button></div></div><div id="web-tab-warning" hidden><div class="web-loading-box"><h1>游戏已在另一个标签页打开</h1><p>请回到原来的标签页继续玩，或关闭它后再点下面的按钮。</p><button class="btn wide" data-web-action="reload">重新连接</button></div></div><input id="web-save-file" type="file" accept=".json,application/json" hidden><noscript>请开启 JavaScript 后游玩。</noscript>${['assets.js','data.js','engine.js','art.js','web-platform.js','ui.js','web-boot.js'].map(f=>`<script defer src="${f}"></script>`).join('')}</body>`);
+// Keep scripts from the same build together when a browser has an older cached copy.
+const version=createHash('sha256').update(fs.readdirSync(src).sort().map(read).join('\n')).digest('hex').slice(0,12);
+html=html.replace(/((?:src|href)="[^"?]+\.(?:js|css))"/g,'$1?v='+version+'"');
 fs.writeFileSync(path.join(dist,'index.html'),html);fs.cpSync(path.join(root,'assets'),path.join(dist,'assets'),{recursive:true});fs.cpSync(path.join(root,'licenses'),path.join(dist,'licenses'),{recursive:true});
 fs.writeFileSync(path.join(dist,'robots.txt'),'User-agent: *\nAllow: /\n');fs.writeFileSync(path.join(dist,'.nojekyll'),'');console.log('Built static browser game with 69 character assets');

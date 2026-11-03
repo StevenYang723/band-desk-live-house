@@ -26,6 +26,7 @@ jobs:
       - name: Check assets and game rules
         run: |
           node scripts/check.mjs
+          node scripts/test-loading.cjs
           node scripts/test-economy.cjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4

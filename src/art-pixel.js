@@ -1,6 +1,32 @@
 (function(root){
 'use strict';
-const assets=root.ArtAssets,images={};let loaded=false;const ready=Promise.all(Object.entries(assets.characters).map(([id,a])=>new Promise(resolve=>{const im=new Image();im.onload=()=>{images[id]=im;resolve();};im.onerror=resolve;im.src=a.body;}))).then(()=>loaded=true);
+const assets=root.ArtAssets,images={},progress={loaded:0,total:Object.keys(assets.characters).length,failed:[],loading:false,revision:0};
+let loaded=false,batch=null;
+const attempts={},wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function loadImage(id){return new Promise(resolve=>{
+ const im=new Image(),attempt=attempts[id]=(attempts[id]||0)+1;
+ let done=false;
+ const finish=ok=>{if(done)return;done=true;clearTimeout(timeout);im.onload=im.onerror=null;if(ok){images[id]=im;progress.loaded++;progress.revision++;}else im.removeAttribute('src');resolve(ok);};
+ const timeout=setTimeout(()=>finish(false),20000);
+ im.onload=()=>finish(im.naturalWidth>0);im.onerror=()=>finish(false);
+ // A failed response may be cached; retry only this asset with a fresh URL.
+ const url=assets.characters[id].body;
+ im.src=attempt===1?url:url+(url.includes('?')?'&':'?')+'retry='+attempt+'-'+Date.now();
+});}
+function loadBatch(ids){
+ if(batch)return batch;
+ if(!ids.length)return Promise.resolve();
+ progress.loading=true;progress.failed=[];let next=0;
+ async function worker(){while(next<ids.length){const id=ids[next++];if(images[id])continue;let ok=false;
+  for(let attempt=0;attempt<3&&!ok;attempt++){if(attempt)await wait(750*attempt);ok=await loadImage(id);}
+  if(!ok)progress.failed.push(id);
+ }}
+ batch=Promise.all(Array.from({length:Math.min(4,ids.length)},worker)).finally(()=>{progress.loading=false;batch=null;});
+ return batch;
+}
+function retry(){return batch||loadBatch(Object.keys(assets.characters).filter(id=>!images[id]));}
+const ready=retry().then(()=>{loaded=true;});
+root.addEventListener?.('online',()=>{if(progress.failed.length)retry();});
 const D=root.GameData,outline='#202338',skin='#f7d9c4',skinShade='#dfb6a4';
 function rect(g,x,y,w,h,c){g.fillStyle=c;g.fillRect(Math.round(x),Math.round(y),Math.ceil(w),Math.ceil(h));}
 function pixline(g,x1,y1,x2,y2,c,w=1){const steps=Math.max(Math.abs(x2-x1),Math.abs(y2-y1));for(let i=0;i<=steps;i++)rect(g,x1+(x2-x1)*i/steps,y1+(y2-y1)*i/steps,w,w,c);}
@@ -20,7 +46,7 @@ function instrument(g,type,x,y,color='#f589ac',scale=1,beat=0){g.save();g.transl
  else if(type==='note'){r(9,3,3,17,color);r(12,3,11,3,color);r(21,4,3,16,color);r(4,18,8,5,color);r(16,18,8,5,color);}
  else star(g,14,14,color,2);
  g.restore();}
-function character(g,id,x,y,scale=1,time=0,perform=false,portrait=false){const im=images[id];if(!im)return;const bob=perform?Math.round(Math.sin(time*4+D.byChar[id].index)):0;const h=96*scale,w=im.width/im.height*h;g.save();g.imageSmoothingEnabled=false;g.drawImage(im,Math.round(x+32-w/2),Math.round(y+96-h+bob),w,h);g.restore();}
+function character(g,id,x,y,scale=1,time=0,perform=false,portrait=false){const im=images[id];if(!im){g.save();rect(g,x+3,y+36,58,58,'#29384e');g.textAlign='center';g.fillStyle='#e4cfb4';g.font='9px PixelUI, sans-serif';g.fillText(D.byChar[id]?.name||'',x+32,y+61,54);g.font='8px PixelUI, sans-serif';g.fillText('立绘加载中',x+32,y+78,54);g.restore();return;}const bob=perform?Math.round(Math.sin(time*4+D.byChar[id].index)):0;const h=96*scale,w=im.width/im.height*h;g.save();g.imageSmoothingEnabled=false;g.drawImage(im,Math.round(x+32-w/2),Math.round(y+96-h+bob),w,h);g.restore();}
 function iconCanvas(canvas,type,color){if(!canvas)return;const g=canvas.getContext('2d');g.imageSmoothingEnabled=false;g.clearRect(0,0,canvas.width,canvas.height);g.save();g.scale(canvas.width/32,canvas.height/32);instrument(g,type,2,2,color||'#f3b2ca',.9);g.restore();}
 function avatar(canvas,id){const g=canvas.getContext('2d'),c=D.byChar[id],im=images[id];g.imageSmoothingEnabled=false;g.clearRect(0,0,canvas.width,canvas.height);if(!c)return;g.fillStyle='#252f47';g.fillRect(0,0,canvas.width,canvas.height);g.fillStyle=D.byBand[c.band].color+'30';for(let y=0;y<canvas.height;y+=8)g.fillRect(0,y,canvas.width,1);if(im){const head=assets.characters[id].head||{x:12,y:0,w:40,h:40};g.drawImage(im,head.x,head.y,head.w,head.h,0,0,canvas.width,canvas.height);}}
 function stage(canvas,engine,seconds,effects=[]){const g=canvas.getContext('2d'),s=engine.s,venue=D.venues[s.venue],w=360,h=260;g.setTransform(canvas.width/w,0,0,canvas.height/h,0,0);g.imageSmoothingEnabled=false;g.clearRect(0,0,w,h);const r=(x,y,w,h,c)=>rect(g,x,y,w,h,c),t=seconds,accent=D.byBand[D.byChar[s.team[0]]?.band]?.color||'#72b9ed';
@@ -42,5 +68,5 @@ function stage(canvas,engine,seconds,effects=[]){const g=canvas.getContext('2d')
  for(const e of effects){if(e.life<=0)continue;if(e.type==='skill'){const pos=positions[e.index];if(!pos)continue;g.textAlign='center';g.font='bold 8px Microsoft YaHei';g.fillStyle=e.crit?'#fff1b1':'#b6f0e8';g.fillText(e.crit?'PERFECT':'♪',pos[0]+32,Math.max(26,pos[1]-(e.index<3?32:19)-(1-e.life/2)*12));}if(e.type==='encore'){g.font='bold 25px Consolas';g.textAlign='center';g.fillStyle='#211d37';g.fillText('ENCORE!',182,124);g.fillStyle='#f9dc94';g.fillText('ENCORE!',180,122);for(let i=0;i<15;i++){r((i*37+t*18)%360,50+((i*27+t*23)%130),2,3,[accent,'#b2e6df','#f9dc94'][i%3]);}}}
  if(s.paused){g.fillStyle='#181b32aa';g.fillRect(0,0,w,h);g.textAlign='center';g.font='bold 16px Microsoft YaHei';g.fillStyle='#f7e2c6';g.fillText('演出暂停',180,127);}
 }
-root.PixelArt={ready,isReady:()=>loaded,character,avatar,iconCanvas,stage,instrument,star};
+root.PixelArt={ready,progress,retry,source:id=>images[id]?.src||assets.characters[id].body,isReady:()=>loaded,character,avatar,iconCanvas,stage,instrument,star};
 })(window);
