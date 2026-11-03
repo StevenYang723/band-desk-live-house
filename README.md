@@ -5,6 +5,7 @@
 一个竖屏像素风同人挂机小游戏。选一支喜欢的乐队，演出赚金币、招募成员、收集乐器，在十二站巡演里搭配临时灵感。
 
 - 69 位成员，金币随机招募，重复成员转为专属技能点。
+- 招募支持像素舞台开幕、单抽角色亮相与十连逐张翻牌，可跳过动画；结果在动画前保存。
 - 随机乐器、装备位强化、词条重铸和角色适配加成。
 - 每场展示金币、声望、零件和装备奖励；自动模式停留 3 秒继续，手动模式点击继续。
 - 同一舞台完成 3 场且最佳评价达到 A 后解锁离线收益。每天 6 小时，每次升级 +3 小时，最多每天 24 小时，北京时间零点刷新。
@@ -24,6 +25,7 @@
 node scripts/build.mjs
 node scripts/check.mjs
 node scripts/test-loading.cjs
+node scripts/test-recruit-animation.cjs
 node scripts/test-economy.cjs
 node scripts/serve.mjs
 ```

@@ -100,7 +100,7 @@ function performLiveAction(kind,index){
  // Keep the live controls mounted so their width transitions continue from the current value.
  updateHud();save();notice((skill?D.byChar[s.team[index]].name:'安可')+' · 热度 +'+fmt(Math.round(s.heat-before)),2);
 }
-function action(text){const [a,...args]=text.split(':'),id=args[0],n=Number(id);let ok=true,keep=true;if(E.s.pendingResult&&!['continueshow','holdresult'].includes(a))return;
+function action(text){if(window.RecruitAnimation?.active)return;const [a,...args]=text.split(':'),id=args[0],n=Number(id);let ok=true,keep=true;if(E.s.pendingResult&&!['continueshow','holdresult'].includes(a))return;
  switch(a){
  case'continueshow':E.continueShow();syncResult();save();render();return;
  case'holdresult':E.s.auto=false;E.touch();syncResult();save();render();return;
@@ -115,7 +115,7 @@ function action(text){const [a,...args]=text.split(':'),id=args[0],n=Number(id);
  case'useband':ok=E.useBand(id);if(ok)notice(D.byBand[id].name+' 整队上场');break;
  case'wish':E.s.wish=id;E.touch();notice('愿望单已更新，20 场保底进度保留');break;
  case'recruitdesk':open('recruit');return;case'recruitlast':open('recruitresult');return;
- case'recruit':ok=!!E.recruit(n);if(ok){open('recruitresult');beep(660,.2);}break;case'skillup':ok=E.skillUp(id);if(ok)notice('技能已提升至 Lv.'+E.s.members[id].skill);break;
+ case'recruit':{const results=E.recruit(n);ok=!!results;if(ok){post('save');open('recruitresult');window.RecruitAnimation?.play(results,{draw:drawAssets,tone:beep,onDone:()=>{if(modalKind==='recruitresult')renderModal();}});}break;}case'skillup':ok=E.skillUp(id);if(ok)notice('技能已提升至 Lv.'+E.s.members[id].skill);break;
  case'equip':ok=E.equip(id,args[1],args[2]);if(ok){notice('已装备 · '+E.item(id).name);open('char',args[1]);}break;
  case'enhance':ok=E.enhance(id,args[1]);if(ok)beep(740,.15);break;
  case'lock':E.item(id).locked=!E.item(id).locked;E.touch();break;
